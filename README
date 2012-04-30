@@ -6,8 +6,8 @@ Then run hipster-serve in the directory you want to serve from:
 
 $ hipster-serve
 
-Configure your commands at localhost:1234/
+Configure your commands at localhost:8080/
 
-Access the files at localhost:1234/path/relative/to/serve/directory
+Access the files at localhost:8080/path/relative/to/serve/directory
 
 TODO: write a real README

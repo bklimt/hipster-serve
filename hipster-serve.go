@@ -204,7 +204,7 @@ const configHtml = `
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>build-serve config</title>
+    <title>hipster-serve config</title>
     <style>
       html, body, p, ul, li { margin:0; padding:0 }
       body { font-family:monospace; padding:20px; }
@@ -219,7 +219,7 @@ const configHtml = `
   </head>
   <body>
     <div id="container">
-      <h1>build-serve config</h1>
+      <h1>hipster-serve config</h1>
       {{if .HasError}}
         <p class="error">{{.Error}}</p>
       {{end}}
