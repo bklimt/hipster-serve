@@ -7,15 +7,19 @@ import (
 	"flag"
 	"html/template"
 	"io/ioutil"
+	"encoding/json"
 	"log"
 	"mime"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 )
+
+const cmdsFileName = "hipster-serve.json"
 
 var (
 	port = flag.Int("port", 8080, "port to listen on")
@@ -24,24 +28,32 @@ var (
 	cache = NewCache()
 )
 
-// A concurrent map from string to []byte.
+// A concurrent map from string to interface{}.
 type Cache struct {
-	Data map[string][]byte
+	Data map[string]interface{}
 	Lock sync.RWMutex
 }
 
 func NewCache() *Cache {
-	return &Cache{ Data: make(map[string][]byte) }
+	return &Cache{ Data: make(map[string]interface{}) }
 }
 
-func (c *Cache) Get(key string) (value []byte, ok bool) {
+func (c *Cache) get(key string) (value interface{}, ok bool) {
 	c.Lock.RLock()
 	defer c.Lock.RUnlock()
 	value, ok = c.Data[key]
 	return
 }
 
-func (c *Cache) Put(key string, value []byte) {
+func (c *Cache) GetBytes(key string) (value []byte, ok bool) {
+	v, ok := c.get(key)
+	if ok {
+		value = v.([]byte)
+	}
+	return
+}
+
+func (c *Cache) Put(key string, value interface{}) {
 	c.Lock.Lock()
 	defer c.Lock.Unlock()
 	c.Data[key] = value
@@ -60,17 +72,15 @@ func getCmd(path string) (cmd string, ok bool) {
 	defer cmds.Lock.RUnlock()
 	for k, v := range cmds.Data {
 		if strings.HasSuffix(path, k) {
-			return "cat " + path + " | " + string(v), true
+			return "cat " + path + " | " + v.(string), true
 		}
 	}
 	return "", false
 }
 
 // Returns false if |suffix| is a suffix of another suffix or vice
-// versa.
+// versa. Assumes a read or write lock is held on |cmds|.
 func valid(suffix string) bool {
-	cmds.Lock.RLock()
-	defer cmds.Lock.RUnlock()
 	for k, _ := range cmds.Data {
 		if strings.HasSuffix(suffix, k) || strings.HasSuffix(k, suffix) {
 			return false
@@ -81,28 +91,51 @@ func valid(suffix string) bool {
 
 // Serves the config page at localhost:port/.
 func configHandler(w http.ResponseWriter, r *http.Request) {
+	// Get any POST data.
 	r.ParseForm()
 	rm := strings.TrimSpace(r.FormValue("rm"))
 	suffix := strings.TrimSpace(r.FormValue("suffix"))
 	cmd := strings.TrimSpace(r.FormValue("cmd"))
+	// Make the changes requested.
 	error := ""
 	if rm != "" && suffix != "" && cmd != "" {
+		cmds.Lock.Lock()
+		log.Printf("inside lock")
+		changed := false
 		if rm == "true" {
-			cmds.Delete(suffix)
+			delete(cmds.Data, suffix)
+			changed = true
 			log.Printf("Deleted cmd for suffix: %s", suffix)
 		} else if valid(suffix) {
-			cmds.Put(suffix, []byte(cmd))
+			cmds.Data[suffix] = cmd
+			changed = true
 			log.Printf("Saved cmd: %s | %s", suffix, cmd)
 		} else {
 			error = "One suffix can't be a suffix of another."
 		}
+		if changed {
+			// Save the cmds to file.
+			f, err := os.Create(cmdsFileName)
+			if err != nil {
+				log.Printf("Not able to create files!")
+			} else {
+				err = json.NewEncoder(f).Encode(&cmds.Data)
+				f.Close()
+				if err != nil {
+					log.Printf("Not able to write json to file!")
+				}
+			}
+		}
+		cmds.Lock.Unlock()
 	}
+	// Make a copy of cmds so we have a stable version.
 	m := make(map[string]string)
 	cmds.Lock.RLock()
 	for k, v := range cmds.Data {
-		m[k] = string(v)
+		m[k] = v.(string)
 	}
 	cmds.Lock.RUnlock()
+	// Write the template.
 	templ.Execute(w, map[string]interface{}{"Cmds": m, "HasError": error != "", "Error": error})
 }
 
@@ -114,7 +147,7 @@ func fileHandler(w http.ResponseWriter, r *http.Request) {
 	path := "." + r.URL.Path
 	w.Header().Set("Content-Type", mime.TypeByExtension(filepath.Ext(path)))
 	if useCache {
-		bytes, ok := cache.Get(path)
+		bytes, ok := cache.GetBytes(path)
 		if ok {
 			w.Write(bytes)
 			log.Printf("Read from cache for %s", path)
@@ -152,6 +185,16 @@ func handler(w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	flag.Parse()
+	// Load |cmds| from the json file if it's there.
+	f, err := os.Open(cmdsFileName)
+	if err == nil {
+		err = json.NewDecoder(f).Decode(&cmds.Data)
+		f.Close()
+		if err != nil {
+			panic("Can't read hipster-serve.json.")
+		}
+	}
+	// Start serving.
 	http.HandleFunc("/", handler)
 	log.Fatal(http.ListenAndServe(":" + strconv.Itoa(*port), nil))
 }
