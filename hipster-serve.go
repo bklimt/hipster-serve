@@ -152,7 +152,7 @@ func main() {
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
-// The config page at localhost:port/
+// The config page at localhost:port/.
 const configHtml = `
 <!doctype html>
 <html lang="en">
@@ -189,7 +189,7 @@ const configHtml = `
             </form>
           </li>
         {{end}}
-				<li>
+        <li>
           <h3>New rule:</h3>
           <form method="post" enctype="application/x-www-form-urlencoded" action="/">
             <label>suffix:<input class="suffix-box" name="suffix" /></label>
@@ -197,7 +197,7 @@ const configHtml = `
             <input type="hidden" name="rm" value="false" />
             <button>save</button>
           </form>
-				</li>
+        </li>
       </ul>
     </div>
   </body>
