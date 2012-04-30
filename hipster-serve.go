@@ -100,7 +100,6 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 	error := ""
 	if rm != "" && suffix != "" && cmd != "" {
 		cmds.Lock.Lock()
-		log.Printf("inside lock")
 		changed := false
 		if rm == "true" {
 			delete(cmds.Data, suffix)
