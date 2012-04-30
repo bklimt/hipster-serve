@@ -4,6 +4,7 @@
 package main
 
 import (
+	"flag"
 	"html/template"
 	"io/ioutil"
 	"log"
@@ -11,11 +12,13 @@ import (
 	"net/http"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
 
 var (
+	port = flag.Int("port", 8080, "port to listen on")
 	templ = template.Must(template.New("config").Parse(configHtml))
 	cmds = NewCache()
 	cache = NewCache()
@@ -148,8 +151,9 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	flag.Parse()
 	http.HandleFunc("/", handler)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(":" + strconv.Itoa(*port), nil))
 }
 
 // The config page at localhost:port/.
