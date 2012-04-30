@@ -1,1 +1,13 @@
-TODO: write the README
+Install it with:
+
+$ go get github.com/ryanlbrown/hipster-serve
+
+Then run hipster-serve in the directory you want to serve from:
+
+$ hipster-serve
+
+Configure your commands at localhost:1234/
+
+Access the files at localhost:1234/path/relative/to/serve/directory
+
+TODO: write a real README
