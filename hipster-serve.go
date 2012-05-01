@@ -21,9 +21,14 @@ import (
 
 const cmdsFileName = "hipster-serve.json"
 
+type Deletion struct {
+	Suffix, Cmd string
+}
+
 var (
 	port = flag.Int("port", 8080, "port to listen on")
 	templ = template.Must(template.New("config").Parse(configHtml))
+	deletions = make([]Deletion, 0, 10)
 	cmds = NewCache()
 	cache = NewCache()
 )
@@ -102,6 +107,7 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		cmds.Lock.Lock()
 		changed := false
 		if rm == "true" {
+			deletions = append(deletions, Deletion{suffix, cmds.Data[suffix].(string)})
 			delete(cmds.Data, suffix)
 			changed = true
 			log.Printf("Deleted cmd for suffix: %s", suffix)
@@ -127,15 +133,17 @@ func configHandler(w http.ResponseWriter, r *http.Request) {
 		}
 		cmds.Lock.Unlock()
 	}
-	// Make a copy of cmds so we have a stable version.
+	// Make a copy of cmds and deletions so we have a stable version.
 	m := make(map[string]string)
+	d := make([]Deletion, len(deletions), len(deletions))
 	cmds.Lock.RLock()
 	for k, v := range cmds.Data {
 		m[k] = v.(string)
 	}
+	copy(d, deletions)
 	cmds.Lock.RUnlock()
 	// Write the template.
-	templ.Execute(w, map[string]interface{}{"Cmds": m, "HasError": error != "", "Error": error})
+	templ.Execute(w, map[string]interface{}{"Cmds": m, "HasError": error != "", "Error": error, "Deletions": d})
 }
 
 // Serves any files from localhost:port/file/path optionally running
@@ -214,6 +222,7 @@ const configHtml = `
       .suffix-box { width:50px }
       .suffix { font-weight:bold; }
       .error { color:red; font-size:16px; font-family:sans-serif; padding:7px 0; }
+      .del { color:#aaa }
       #container { margin:0 auto; width:800px; }
     </style>
   </head>
@@ -224,7 +233,7 @@ const configHtml = `
         <p class="error">{{.Error}}</p>
       {{end}}
       <ul>
-        {{ range $i, $v := .Cmds }}
+        {{range $i, $v := .Cmds}}
           <li>
             <form method="post" enctype="application/x-www-form-urlencoded" action="/">
               <input type="hidden" name="suffix" value="{{$i}}" />
@@ -236,7 +245,7 @@ const configHtml = `
           </li>
         {{end}}
         <li>
-          <h3>New rule:</h3>
+          <h3>new rule <span class="del">(e.g. .html, echo "hello, world")</span>:</h3>
           <form method="post" enctype="application/x-www-form-urlencoded" action="/">
             <label>suffix:<input class="suffix-box" name="suffix" /></label>
             <label>cmd:<input class="command-box" name="cmd" /></label>
@@ -244,6 +253,12 @@ const configHtml = `
             <button>save</button>
           </form>
         </li>
+      </ul>
+      <h3 class="del">deleted rules:</h3>
+      <ul class="del">
+        {{range $v := .Deletions}}
+          <li><span class="suffix">{{$v.Suffix}}</span> | {{$v.Cmd}}</li>
+        {{end}}
       </ul>
     </div>
   </body>
