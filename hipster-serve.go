@@ -72,7 +72,7 @@ func getCmd(path string) (cmd string, ok bool) {
 	defer cmds.Lock.RUnlock()
 	for k, v := range cmds.Data {
 		if strings.HasSuffix(path, k) {
-			return "cat " + path + " | " + v.(string), true
+			return strings.Replace(v.(string), "%f", path, -1), true
 		}
 	}
 	return "", false
